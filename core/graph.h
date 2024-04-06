@@ -1,172 +1,135 @@
+#ifndef GRAPH_H
+#define GRAPH_H
 #include "quick_sort.h"
 #include "utils.h"
+#include <iostream>
 #include <fstream>
+#include <vector>
+#include <limits>
+#include <string>
+#include <algorithm>
 
-typedef std::pair<uintV, uintV> intPair;
-
-template <class E> struct ascendingF {
-  E operator()(const E &a, const E &b) const { return a > b; }
-};
-
-class Vertex {
-public:
-  uintE out_degree_;
-  uintE in_degree_;
-
-  uintV *out_neighbors_;
-  uintV *in_neighbors_;
-
-  Vertex()
-      : out_degree_(0), in_degree_(0), out_neighbors_(nullptr),
-        in_neighbors_(nullptr) {}
-
-  uintV getOutNeighbor(uintE i) { return out_neighbors_[i]; }
-
-  uintV getInNeighbor(uintE i) { return in_neighbors_[i]; }
-
-  void setOutNeighbors(uintV *t) { out_neighbors_ = t; }
-  void setInNeighbors(uintV *t) { in_neighbors_ = t; }
-
-  void setOutDegree(uintE d) { out_degree_ = d; }
-  void setInDegree(uintE d) { in_degree_ = d; }
-
-  uintE getOutDegree() { return out_degree_; }
-  uintE getInDegree() { return in_degree_; }
-  uintV *getOutNeighbors() { return out_neighbors_; }
-  uintV *getInNeighbors() { return in_neighbors_; }
-};
-
-class Graph {
-
-  uintV *out_edges_;
-  uintV *in_edges_;
+class Graph
+{
+private:
+    std::vector<std::vector<WeightType>> adjMatrix_;
+    std::vector<std::vector<uintV>> neighbors_;
+    size_t numVertices_;
 
 public:
-  uintV n_;
-  uintE m_;
-  Vertex *vertices_;
-  Graph() = default;
+    Graph() = default;
 
-  template <class T> void readGraphFromBinary(std::string input_file_path) {
-    std::string input_file_path_csr = input_file_path + ".csr";
-    std::string input_file_path_csc = input_file_path + ".csc";
-
-    // Read csr file
-    std::ifstream input_stream(input_file_path_csr,
-                               std::ifstream::in | std::ios::binary);
-    if (!input_stream) {
-	    std::cout << "Input File: " << input_file_path_csr << " does not exist. Terminating" << std::endl;
-	    exit(2);
-    }
-    input_stream.seekg(0, std::ios::end);
-    T size = input_stream.tellg();
-    input_stream.seekg(0);
-    char *csr_char_array = (char *)malloc(size);
-    input_stream.read(csr_char_array, size);
-    input_stream.close();
-    T *csr_contents = (T *)csr_char_array;
-
-    // Read csc file
-    std::ifstream input_stream2(input_file_path_csc,
-                                std::ifstream::in | std::ios::binary);
-    if (!input_stream) {
-            std::cout << "Input File: " << input_file_path_csc << " does not exist. Terminating" << std::endl;
-            exit(2);
-    }
-    input_stream2.seekg(0, std::ios::end);
-    size = input_stream2.tellg();
-    input_stream2.seekg(0);
-    char *csc_char_array = (char *)malloc(size);
-    input_stream2.read(csc_char_array, size);
-    input_stream2.close();
-    T *csc_contents = (T *)csc_char_array;
-
-    n_ = csr_contents[0];
-    m_ = csr_contents[1];
-
-    out_edges_ = new uintV[m_];
-    in_edges_ = new uintV[m_];
-    vertices_ = new Vertex[n_];
-
-    T *out_offsets = new uintE[n_];
-    T *in_offsets = new uintE[n_];
-
-    // Update CSR ----------------
-    for (uintV i = 0; i < n_; i++) {
-      out_offsets[i] = csr_contents[i + 2];
-      in_offsets[i] = csc_contents[i + 2];
+    Graph(size_t numVertices) : numVertices_(numVertices), adjMatrix_(numVertices, std::vector<WeightType>(numVertices, MAX_WEIGHT)), neighbors_(numVertices) {
+        for (size_t i = 0; i < numVertices_; ++i) {
+            adjMatrix_[i][i] = 0; // Initialize self-loops to 0
+        }
     }
 
-    for (uintE i = 0; i < m_; i++) {
-      out_edges_[i] = csr_contents[i + (uintE)(n_ + 2)];
-      in_edges_[i] = csc_contents[i + (uintE)(n_ + 2)];
+    template <class T>
+    static Graph readGraphFromBinary(const std::string& inputFilePath) {
+        std::ifstream inputFile(inputFilePath, std::ios::binary);
+        if (!inputFile.is_open()) {
+            std::cerr << "Error opening input file: " << inputFilePath << std::endl;
+            exit(1); // or handle error differently
+        }
+
+        uintV src, dest;
+        T weight;
+        uintV maxVertexId = 0;
+
+        // Find the max vertex ID (assuming the file's cursor is at the beginning)
+        while (inputFile.read(reinterpret_cast<char*>(&src), sizeof(src))
+               && inputFile.read(reinterpret_cast<char*>(&dest), sizeof(dest))
+               && inputFile.read(reinterpret_cast<char*>(&weight), sizeof(weight))) {
+            maxVertexId = std::max({maxVertexId, src, dest});
+        }
+
+        Graph g(maxVertexId + 1); // Create a Graph with vertices numbered from 0 to maxVertexId
+
+        // Reset to read the file again
+        inputFile.clear(); // Clear eof and fail flags
+        inputFile.seekg(0, std::ios::beg);
+
+        // Second pass to actually read and add the edges
+        while (inputFile.read(reinterpret_cast<char*>(&src), sizeof(src))
+               && inputFile.read(reinterpret_cast<char*>(&dest), sizeof(dest))
+               && inputFile.read(reinterpret_cast<char*>(&weight), sizeof(weight))) {
+            // Convert T weight to uint32_t if necessary or adjust Graph to template class
+            g.addEdge(src, dest, static_cast<WeightType>(weight));
+        }
+
+        return g;
     }
 
-    free(csr_contents);
-    free(csc_contents);
-
-    for (uintV i = 0; i < n_; i++) {
-      uintE start = out_offsets[i];
-      uintE d = (i == n_ - 1) ? (m_ - start) : (out_offsets[i + 1] - start);
-      vertices_[i].setOutNeighbors(out_edges_ + start);
-      if (d > 1) {
-        quickSort(out_edges_ + start, d,
-                  [](uintV val1, uintV val2) { return val1 < val2; });
-      }
-      vertices_[i].setOutDegree(d);
-
-      start = in_offsets[i];
-      d = (i == n_ - 1) ? (m_ - start) : (in_offsets[i + 1] - start);
-      vertices_[i].setInNeighbors(in_edges_ + start);
-      if (d > 1) {
-        quickSort(in_edges_ + start, d,
-                  [](uintV val1, uintV val2) { return val1 < val2; });
-      }
-      vertices_[i].setInDegree(d);
+    void addEdge(uintV src, uintV dest, WeightType weight)
+    {
+        if (src >= numVertices_ || dest >= numVertices_)
+        {
+            std::cerr << "Error: Vertex index out of bounds." << std::endl;
+            return;
+        }
+        adjMatrix_[src][dest] = weight;
+        adjMatrix_[dest][src] = weight;
+        neighbors_[src].push_back(dest);
+        neighbors_[dest].push_back(src);
     }
 
-    delete[] out_offsets;
-    delete[] in_offsets;
-  }
-
-  void printGraph(std::string output_file_path = "/tmp/output/a") {
-    std::cout << "Graph :\n";
-    std::cout << "n : " << n_ << "\n";
-    std::cout << "m : " << m_ << "\n";
-    std::cout << "Parsing outEdges\n";
-    std::ofstream output_file;
-    output_file.open(output_file_path + "1", std::ios::out);
-    for (uintV i = 0; i < n_; i++) {
-      Vertex &v = vertices_[i];
-      auto d = v.getOutDegree();
-      if (d != 0) {
-        insertionSort(v.getOutNeighbors(), d, ascendingF<uintV>());
-      }
-
-      for (uintE j = 0; j < v.getOutDegree(); j++) {
-        output_file << i << " " << v.getOutNeighbor(j) << "\n";
-      }
+    const std::vector<uintV> &getNeighbors(uintV node) const
+    {
+        if (node >= numVertices_)
+        {
+            std::cerr << "Error: Vertex index out of bounds." << std::endl;
+            static const std::vector<uintV> empty;
+            return empty; // Safely return an empty vector for out of bounds access
+        }
+        return neighbors_[node];
     }
-    output_file.close();
 
-    std::cout << "Parsing inEdges\n";
-    output_file.open(output_file_path + "2", std::ios::out);
-    for (uintV i = 0; i < n_; i++) {
-      Vertex &v = vertices_[i];
-      auto d = v.getInDegree();
-      if (d != 0) {
-        insertionSort(v.getInNeighbors(), d, ascendingF<uintV>());
-      }
-      for (uintE j = 0; j < v.getInDegree(); j++) {
-        output_file << i << " " << v.getInNeighbor(j) << "\n";
-      }
+    size_t numVertices() const
+    {
+        return numVertices_;
     }
-    output_file.close();
-  }
 
-  ~Graph() {
-    delete[] out_edges_;
-    delete[] in_edges_;
-    delete[] vertices_;
-  }
+    WeightType getEdgeWeight(uintV src, uintV dest) const
+    {
+        if (src >= numVertices_ || dest >= numVertices_)
+        {
+            std::cerr << "Error: Vertex index out of bounds." << std::endl;
+            return MAX_WEIGHT;
+        }
+        return adjMatrix_[src][dest];
+    }
+
+    std::vector<Graph> partition(int numPartitions) const
+    {
+        std::vector<Graph> partitions;
+        size_t partitionSize = numVertices_ / numPartitions;
+        size_t remainder = numVertices_ % numPartitions;
+
+        size_t start = 0;
+        for (int i = 0; i < numPartitions; ++i)
+        {
+            size_t end = start + partitionSize + (i < remainder ? 1 : 0);
+            Graph subGraph(end - start);
+
+            for (size_t j = start; j < end; ++j)
+            {
+                for (auto neighbor : neighbors_[j])
+                {
+                    if (neighbor >= start && neighbor < end)
+                    {
+                        WeightType weight = adjMatrix_[j][neighbor];
+                        subGraph.addEdge(j - start, neighbor - start, weight);
+                    }
+                }
+            }
+
+            partitions.push_back(subGraph);
+            start = end;
+        }
+
+        return partitions;
+    }
+
 };
+#endif

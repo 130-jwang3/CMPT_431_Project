@@ -12,6 +12,8 @@
 #define intV int32_t
 #define uintV int32_t
 #define UINTV_MAX INT_MAX
+#define WeightType int32_t
+#define MAX_WEIGHT INT_MAX
 
 #define intE int32_t
 #define uintE int32_t
