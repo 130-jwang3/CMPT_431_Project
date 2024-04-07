@@ -16,14 +16,14 @@ int main(int argc, char *argv[]) {
       "",
       {
           {"nThreads", "Number of Threads",
-           cxxopts::value<uint>()->default_value(DEFAULT_NUMBER_OF_THREADS)},
+           cxxopts::value<uintE>()->default_value(DEFAULT_NUMBER_OF_THREADS)},
           {"inputFile", "Input graph file path",
            cxxopts::value<std::string>()->default_value(
                "/scratch/input_graphs/roadNet-CA")},
       });
 
   auto cl_options = options.parse(argc, argv);
-  uint n_threads = cl_options["nThreads"].as<uint>();
+  uintE n_threads = cl_options["nThreads"].as<uintE>();
   std::string input_file_path = cl_options["inputFile"].as<std::string>();
 
   std::cout << std::fixed;

@@ -1,3 +1,4 @@
+#include "core/graph.h"
 #include "core/utils.h"
 #include <iomanip>
 #include <iostream>
