@@ -1,3 +1,5 @@
+#include "core/graph.h"
+#include "core/utils.h"
 #include <climits>
 #include <mpi.h>
 #include <vector>
@@ -5,7 +7,7 @@
 #include <iostream>
 #include <numeric>
 #include <fstream>
-#include <sstream> // Include this header for std::istringstream
+#include <sstream>
 
 #define INF INT_MAX
 
@@ -28,7 +30,7 @@ public:
     std::vector<int> rank;
 
     UnionFind(int size) : parent(size), rank(size, 0) {
-        std::iota(parent.begin(), parent.end(), 0);  // Initialize parent to self
+        std::iota(parent.begin(), parent.end(), 0);
     }
 
     int find(int u) {
@@ -63,31 +65,48 @@ void computeMST(const std::vector<Edge>& edges, int V) {
     for (const auto& e : edges) {
         if (uf.unionSet(e.vertex1, e.vertex2)) {
             mst.push_back(e);
+            mst_weight+=e.weight;
             if (mst.size() == V - 1) break;
         }
     }
 
-    std::cout << "Edges in the MST:" << std::endl;
-    for (const auto& e : mst) {
-        std::cout << e.vertex1 << " - " << e.vertex2 << " with weight " << e.weight << std::endl;
-        mst_weight+=e.weight;
-    }
+    // std::cout << "Edges in the MST:" << std::endl;
+    // for (const auto& e : mst) {
+    //     std::cout << e.vertex1 << " - " << e.vertex2 << " with weight " << e.weight << std::endl;
+    //     mst_weight+=e.weight;
+    // }
     std::cout << "MST weight is : " << mst_weight << std::endl;
 }
 
 int main(int argc, char** argv) {
-    MPI_Init(&argc, &argv);
+    cxxopts::Options options(
+        "minimum_weight_spanning_tree",
+        "Calculate MST using serial, parallel and MPI execution");
+    options.add_options(
+        "",
+        {
+            {"inputFile", "Input graph file path",
+             cxxopts::value<std::string>()->default_value(
+                 "./testing_graphs/filtered_graph")},
+        });
 
+    auto cl_options = options.parse(argc, argv);
+    std::string input_file_path = cl_options["inputFile"].as<std::string>();
+
+    // std::cout << "Input File Path: " << input_file_path << std::endl;
+    MPI_Init(&argc, &argv);
     int world_rank, world_size;
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
     //const int V = 9; // Number of vertices
     std::vector<Edge> all_edges;
-    int v=0;
+    int v=0;  //vertex counter
 
+    
+    //The leader process is responsible for reading the graph
     if (world_rank == 0) {
-        std::ifstream file("testing_graphs/mini_graph.txt");
+        std::ifstream file(input_file_path);
         if (!file.is_open()) {
             std::cerr << "Error opening file." << std::endl;
             MPI_Abort(MPI_COMM_WORLD, 1);
@@ -108,9 +127,13 @@ int main(int argc, char** argv) {
             max_vertex_id = std::max({max_vertex_id, from, to}); // Update max_vertex_id
             all_edges.emplace_back(weight, from, to);
         }
-
-        v = max_vertex_id + 1; // Calculate V based on max_vertex_id
+        v = max_vertex_id + 1;
     }
+
+    timer t1;
+    t1.start();
+
+    //the leader process splits data to worker processes
 
     int total_edges = all_edges.size();
     MPI_Bcast(&total_edges, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -139,6 +162,8 @@ int main(int argc, char** argv) {
     MPI_Gatherv(local_edges.data(), sendcounts[world_rank], MPI_BYTE,
                 gathered_edges.data(), sendcounts.data(), displs.data(), MPI_BYTE, 0, MPI_COMM_WORLD);
 
+
+    //the root process merges n sorted vectors from work processes
     if (world_rank == 0) {
         std::vector<Edge> fully_sorted_edges;
         fully_sorted_edges.reserve(total_edges); // Reserve space to avoid reallocations
@@ -173,8 +198,9 @@ int main(int argc, char** argv) {
         // }
 
         computeMST(fully_sorted_edges, v);
+        double total_time = t1.stop();
+        std::cout << "Total time taken: " << total_time << std::endl;
     }
-
     MPI_Finalize();
     return 0;
 }
