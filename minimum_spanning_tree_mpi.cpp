@@ -1,141 +1,180 @@
-#include "core/utils.h"
-#include <iomanip>
-#include <iostream>
-#include <stdlib.h>
-#include <string.h>
+#include <climits>
 #include <mpi.h>
+#include <vector>
+#include <algorithm>
+#include <iostream>
+#include <numeric>
 #include <fstream>
+#include <sstream> // Include this header for std::istringstream
 
-using namespace std;
-
-#define V 9 // Number of vertices
 #define INF INT_MAX
 
-void primMSTMPI(int rank, int size, int graph[V][V]) {
-    int vertices_per_process = V / size;
-    int start_vertex = rank * vertices_per_process;
-    int end_vertex = (rank + 1) * vertices_per_process - 1;
+struct Edge {
+    int weight;
+    int vertex1;
+    int vertex2;
 
-    if (rank == size - 1) { // Adjust for the last process to handle all remaining vertices
-        end_vertex = V - 1;
+    Edge() : weight(INF), vertex1(-1), vertex2(-1) {}
+    Edge(int w, int v1, int v2) : weight(w), vertex1(v1), vertex2(v2) {}
+
+    bool operator<(const Edge& e) const {
+        return weight < e.weight;
+    }
+};
+
+class UnionFind {
+public:
+    std::vector<int> parent;
+    std::vector<int> rank;
+
+    UnionFind(int size) : parent(size), rank(size, 0) {
+        std::iota(parent.begin(), parent.end(), 0);  // Initialize parent to self
     }
 
-    int local_key[V], local_parent[V];
-    bool local_mstSet[V];
-
-    for (int i = 0; i < V; i++) {
-        local_key[i] = INF;
-        local_mstSet[i] = false;
-        local_parent[i] = -1;
+    int find(int u) {
+        if (parent[u] != u)
+            parent[u] = find(parent[u]);  // Path compression
+        return parent[u];
     }
 
-    if (rank == 0) {
-        local_key[0] = 0; // Start with vertex 0 for process 0
-    }
-
-    for (int count = 0; count < V; count++) {
-        int global_min_key = INF, local_min_index = -1;
-
-        // Find local minimum key vertex
-        for (int v = start_vertex; v <= end_vertex; v++) {
-            if (!local_mstSet[v] && local_key[v] < global_min_key) {
-                global_min_key = local_key[v];
-                local_min_index = v;
+    bool unionSet(int u, int v) {
+        int rootU = find(u);
+        int rootV = find(v);
+        if (rootU != rootV) {
+            if (rank[rootU] > rank[rootV])
+                parent[rootV] = rootU;
+            else if (rank[rootU] < rank[rootV])
+                parent[rootU] = rootV;
+            else {
+                parent[rootV] = rootU;
+                rank[rootU]++;
             }
+            return true;
         }
+        return false;
+    }
+};
 
-        struct { int key; int index; } local_min = {global_min_key, local_min_index}, global_min;
+void computeMST(const std::vector<Edge>& edges, int V) {
+    long mst_weight = 0;
+    UnionFind uf(V);
+    std::vector<Edge> mst;
 
-        // Existing MPI_Allreduce call to find the global minimum
-        MPI_Allreduce(&local_min, &global_min, 1, MPI_2INT, MPI_MINLOC, MPI_COMM_WORLD);
-
-        int global_min_index = global_min.index;
-
-        // Synchronize local_mstSet across all processes
-        bool is_min_in_set = (global_min_index >= start_vertex && global_min_index <= end_vertex);
-        // Broadcast the decision of including the global minimum vertex in MST
-        MPI_Bcast(&is_min_in_set, 1, MPI_C_BOOL, 0, MPI_COMM_WORLD);
-
-        if (is_min_in_set) {
-            local_mstSet[global_min_index] = true;
-        }
-
-        // Synchronize local_mstSet across all processes to ensure a consistent view
-        MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, local_mstSet, V, MPI_C_BOOL, MPI_COMM_WORLD);
-
-        //update local_key and local_parent based on the selected global minimum
-        for (int v = 0; v < V; v++) {
-            if (graph[global_min_index][v] != INF && !local_mstSet[v] && graph[global_min_index][v] < local_key[v]) {
-                local_parent[v] = global_min_index;
-                local_key[v] = graph[global_min_index][v];
-            }
+    for (const auto& e : edges) {
+        if (uf.unionSet(e.vertex1, e.vertex2)) {
+            mst.push_back(e);
+            if (mst.size() == V - 1) break;
         }
     }
 
-    // Synchronize the local_parent array before printing MST
-    int *gathered_parents = new int[V]; 
-
-    MPI_Allgather(local_parent + start_vertex, vertices_per_process, MPI_INT, 
-                  gathered_parents, vertices_per_process, MPI_INT, 
-                  MPI_COMM_WORLD);
-
-    // Update local_parent with the gathered values
-    memcpy(local_parent, gathered_parents, V * sizeof(int));
-    delete[] gathered_parents;
-
-    // Print the constructed MST
-    if (rank == 0) {
-        cout << "Minimum Spanning Tree (Prim's Algorithm):" << endl;
-        for (int i = 1; i < V; i++) {
-            cout << local_parent[i] << " - " << i << " with weight " << graph[i][local_parent[i]] << endl;
-        }
+    std::cout << "Edges in the MST:" << std::endl;
+    for (const auto& e : mst) {
+        std::cout << e.vertex1 << " - " << e.vertex2 << " with weight " << e.weight << std::endl;
+        mst_weight+=e.weight;
     }
+    std::cout << "MST weight is : " << mst_weight << std::endl;
 }
 
-int main(int argc, char *argv[]){
-    int world_rank, world_size;
-
-    // Initialize MPI
+int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
+
+    int world_rank, world_size;
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
-    if (world_rank == 0){
-        std::cout << "Number of processes : " << world_size << "\n";
+    //const int V = 9; // Number of vertices
+    std::vector<Edge> all_edges;
+    int v=0;
+
+    if (world_rank == 0) {
+        std::ifstream file("testing_graphs/mini_graph.txt");
+        if (!file.is_open()) {
+            std::cerr << "Error opening file." << std::endl;
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+
+        std::string line;
+        // Skip the header line
+        std::getline(file, line);
+
+        int max_vertex_id = -1; // Initialize max_vertex_id
+        while (std::getline(file, line)) {
+            int from, to, weight;
+            std::istringstream iss(line);
+            if (!(iss >> from >> to >> weight)) {
+                std::cerr << "Error reading line from file." << std::endl;
+                MPI_Abort(MPI_COMM_WORLD, 1);
+            }
+            max_vertex_id = std::max({max_vertex_id, from, to}); // Update max_vertex_id
+            all_edges.emplace_back(weight, from, to);
+        }
+
+        v = max_vertex_id + 1; // Calculate V based on max_vertex_id
     }
 
-    // Dynamically initialize graph matrix
-    int graph[V][V];
+    int total_edges = all_edges.size();
+    MPI_Bcast(&total_edges, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-    // Initialize all values to INF
-    for (int i = 0; i < V; i++) {
-        for (int j = 0; j < V; j++) {
-            graph[i][j] = INF;
+    std::vector<int> sendcounts(world_size, total_edges / world_size);
+    std::vector<int> displs(world_size, 0);
+
+    for (int i = 0; i < world_size; ++i) {
+        if (i < total_edges % world_size) {
+            sendcounts[i]++;
         }
     }
 
-    // Read graph data from file
-    string line;
-    ifstream graphFile("./testing_graphs/mini_graphs.txt"); // Make sure to specify the correct path to your file
+    std::partial_sum(sendcounts.begin(), sendcounts.end() - 1, displs.begin() + 1);
+    std::transform(sendcounts.begin(), sendcounts.end(), sendcounts.begin(), [](int x) { return x * sizeof(Edge); });
+    std::transform(displs.begin(), displs.end(), displs.begin(), [](int x) { return x * sizeof(Edge); });
 
-    if (graphFile.is_open()) {
-        // Skip the first line (header)
-        getline(graphFile, line);
+    std::vector<Edge> local_edges(sendcounts[world_rank] / sizeof(Edge));
 
-        while (getline(graphFile, line)) {
-            int fromNode, toNode, weight;
-            sscanf(line.c_str(), "%d\t%d\t%d", &fromNode, &toNode, &weight);
-            graph[fromNode][toNode] = weight;
-            graph[toNode][fromNode] = weight; // Assuming the graph is undirected
+    MPI_Scatterv(all_edges.data(), sendcounts.data(), displs.data(), MPI_BYTE,
+                 local_edges.data(), sendcounts[world_rank], MPI_BYTE, 0, MPI_COMM_WORLD);
+
+    std::sort(local_edges.begin(), local_edges.end());
+
+    std::vector<Edge> gathered_edges(total_edges);
+    MPI_Gatherv(local_edges.data(), sendcounts[world_rank], MPI_BYTE,
+                gathered_edges.data(), sendcounts.data(), displs.data(), MPI_BYTE, 0, MPI_COMM_WORLD);
+
+    if (world_rank == 0) {
+        std::vector<Edge> fully_sorted_edges;
+        fully_sorted_edges.reserve(total_edges); // Reserve space to avoid reallocations
+
+        std::vector<int> current_index(world_size, 0);
+        bool done = false;
+
+        while (!done) {
+            Edge min_edge;
+            min_edge.weight = INF;
+
+            int min_index = -1;
+            for (int i = 0; i < world_size; ++i) {
+                int global_index = displs[i] / sizeof(Edge) + current_index[i];
+                if (current_index[i] < sendcounts[i] / sizeof(Edge) && gathered_edges[global_index].weight < min_edge.weight) {
+                    min_edge = gathered_edges[global_index];
+                    min_index = i;
+                }
+            }
+
+            if (min_edge.weight == INF) {  // All vectors are exhausted
+                done = true;
+            } else {
+                fully_sorted_edges.push_back(min_edge);
+                current_index[min_index]++;
+            }
         }
-        graphFile.close();
-    } else {
-        std::cout << "Unable to open file" << std::endl;
-        MPI_Finalize();
-        return -1; // Exit if file cannot be opened
+
+        // std::cout << "Fully Sorted Edges:" << std::endl;
+        // for (const auto& edge : fully_sorted_edges) {
+        //     std::cout << edge.vertex1 << " - " << edge.vertex2 << " with weight " << edge.weight << std::endl;
+        // }
+
+        computeMST(fully_sorted_edges, v);
     }
 
-    primMSTMPI(world_rank, world_size, graph);
     MPI_Finalize();
     return 0;
 }
