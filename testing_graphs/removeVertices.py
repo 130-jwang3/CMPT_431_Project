@@ -35,22 +35,25 @@ def find_connected_components(graph, filter):
     for vertex in range(filter + 1):
         if vertex not in visited:
             component = set()
-            dfs(vertex, graph, visited, component)
+            dfs_iterative(vertex, graph, visited, component)
             connected_components.append(component)
 
     return connected_components
 
-def dfs(vertex, graph, visited, component):
-    visited.add(vertex)
-    component.add(vertex)
+def dfs_iterative(start_vertex, graph, visited, component):
+    stack = [start_vertex]
 
-    for neighbor in graph:
-        if vertex in neighbor:
-            next_vertex = neighbor[0] if neighbor[0] != vertex else neighbor[1]
-            if next_vertex not in visited:
-                dfs(next_vertex, graph, visited, component)
+    while stack:
+        vertex = stack.pop()
+        if vertex not in visited:
+            visited.add(vertex)
+            component.add(vertex)
+            for neighbor in graph:
+                if vertex in neighbor:
+                    next_vertex = neighbor[0] if neighbor[0] != vertex else neighbor[1]
+                    if next_vertex not in visited:
+                        stack.append(next_vertex)
 
-# Usage example
 input_file = "weighted_graph.txt"
 output_file = "filtered_graph.txt"
-filter_graph(input_file, output_file, 1000)
+filter_graph(input_file, output_file, 40000)
