@@ -1,106 +1,95 @@
 import random
 import sys
+import zipfile
 
-def filter_graph(input_file, output_file, filter):
-    # Create a dictionary to store edges
+def filter_graph(input_zip, output_file, filter):
     edges = {}
+    node_set = set()
 
-    # Read the graph from the input file
-    with open(input_file, 'r') as f:
-        next(f)
-        for line in f:
-            if not line.startswith('#'):
-                parts = line.split()
-                from_node = int(parts[0])
-                to_node = int(parts[1])
-                weight = int(parts[2])
+    # Open the zip file
+    with zipfile.ZipFile(input_zip) as z:
+        # Open the specific text file within the zip file
+        with z.open('weighted_graph.txt') as f:
+            next(f)  # Skip the header line if it exists
+            for line in f:
+                line = line.decode('utf-8')  # Decode bytes to str
+                if not line.startswith('#'):
+                    parts = line.split()
+                    from_node = int(parts[0])
+                    to_node = int(parts[1])
+                    weight = int(parts[2])
 
-                # Check if the nodes are within the desired range
-                if from_node <= filter and to_node <= filter:
-                    edges[(from_node, to_node)] = weight
+                    if from_node <= filter and to_node <= filter:
+                        edges[(from_node, to_node)] = weight
+                        node_set.update([from_node, to_node])
 
-    # Find connected components starting from vertex 0
-    connected_components = find_connected_components(edges, filter)
-
-    # Select the largest connected component starting from vertex 0
+    # Find connected components
+    connected_components = find_connected_components(edges, filter, node_set)
     largest_component = max(connected_components, key=len)
 
-    # Renumber vertices starting from 0 and ensure consecutive indices
-    renumbered_edges, num_vertices = renumber_vertices(edges)
+    # Make sure to include all vertices from 0 to filter in the graph
+    all_vertices = set(range(filter + 1))
+    missing_vertices = all_vertices - largest_component
 
-    # Add missing vertices and randomly connect them to existing vertices
-    complete_graph = add_missing_vertices(renumbered_edges, num_vertices)
+    # Collect all valid edges
+    valid_edges = [
+        (from_node, to_node, edges[(from_node, to_node)])
+        for from_node, to_node in edges
+        if from_node in largest_component and to_node in largest_component
+    ]
 
-    # Sort the edges by 'from_node'
-    sorted_edges = sorted(complete_graph.items(), key=lambda x: x[0])
+    # Connect missing vertices to the largest component
+    for missing in missing_vertices:
+        connect_to = random.choice(list(largest_component))
+        random_weight = random.randint(1, 999)
+        valid_edges.append((missing, connect_to, random_weight))
+        # Add the reverse connection for undirected graph consistency
+        valid_edges.append((connect_to, missing, random_weight))
 
-    # Write the sorted graph to the output file
+    # Sort edges by 'fromNode'
+    valid_edges.sort()
+
+    # Write the sorted edges to the output file
     with open(output_file, 'w') as f:
-        for edge, weight in sorted_edges:
-            f.write(f"{edge[0]} {edge[1]} {weight}\n")
+        for from_node, to_node, weight in valid_edges:
+            f.write(f"{from_node} {to_node} {weight}\n")
 
-def find_connected_components(graph, filter):
+def find_connected_components(graph, filter, node_set):
     visited = set()
     connected_components = []
 
+    def dfs_iterative(start_vertex):
+        stack = [start_vertex]
+        component = set()
+
+        while stack:
+            vertex = stack.pop()
+            if vertex not in visited:
+                visited.add(vertex)
+                component.add(vertex)
+                for (u, v), w in graph.items():
+                    if vertex == u and v not in visited:
+                        stack.append(v)
+                    elif vertex == v and u not in visited:
+                        stack.append(u)
+        return component
+
     for vertex in range(filter + 1):
-        if vertex not in visited:
-            component = set()
-            dfs_iterative(vertex, graph, visited, component)
-            connected_components.append(component)
+        if vertex not in visited and vertex in node_set:  # Start DFS only for nodes present in edges
+            component = dfs_iterative(vertex)
+            if component:  # only add non-empty components
+                connected_components.append(component)
 
     return connected_components
 
-def dfs_iterative(start_vertex, graph, visited, component):
-    stack = [start_vertex]
-
-    while stack:
-        vertex = stack.pop()
-        if vertex not in visited:
-            visited.add(vertex)
-            component.add(vertex)
-            for neighbor in graph:
-                if vertex in neighbor:
-                    next_vertex = neighbor[0] if neighbor[0] != vertex else neighbor[1]
-                    if next_vertex not in visited:
-                        stack.append(next_vertex)
-
-def renumber_vertices(edges):
-    vertex_map = {}
-    new_edges = {}
-    count = 0
-
-    for edge in edges:
-        from_vertex, to_vertex = edge
-        if from_vertex not in vertex_map:
-            vertex_map[from_vertex] = count
-            count += 1
-        if to_vertex not in vertex_map:
-            vertex_map[to_vertex] = count
-            count += 1
-        new_edges[(vertex_map[from_vertex], vertex_map[to_vertex])] = edges[edge]
-
-    return new_edges, count
-
-def add_missing_vertices(edges, num_vertices):
-    existing_vertices = set(edge[0] for edge in edges)
-    complete_graph = edges.copy()
-
-    for i in range(num_vertices):
-        if i not in existing_vertices:
-            random_vertex = random.choice(list(existing_vertices))
-            random_weight = random.randint(1, 1000)
-            complete_graph[(i, random_vertex)] = random_weight
-
-    return complete_graph
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("need to specify num_vertices")
         sys.exit(1)
 
-    input_file = "weighted_graph.txt"
-    output_file = "filtered_graph.txt"
+    input_file = "weighted_graph.zip"
     num_vertices = int(sys.argv[1])
+    output_file = f"graph_{num_vertices}.txt"
 
     filter_graph(input_file, output_file, num_vertices)
