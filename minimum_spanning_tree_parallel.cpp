@@ -1,8 +1,10 @@
 #include "core/graph.h"
 #include "core/utils.h"
+#include "core/ThreadPool.h"
 #include <iomanip>
 #include <iostream>
 #include <stdlib.h>
+#include <atomic>
 #include <thread>
 #include <mutex>
 #include <queue>
@@ -11,165 +13,105 @@
 #include <utility>
 #include <limits>
 
-std::mutex my_mutex; 
+// Mutex for managing access to shared resources
+std::mutex mtx;
 
-void HelperMSTParallel(Graph &g, int startVertex, int endVertex, std::vector<bool> &inMST, std::vector<WeightType> &key, std::vector<uintV> &parent, std::mutex &mtx, std::vector<uintV> &colors, int thread_id, std::priority_queue<std::pair<WeightType, uintV>,
-                      std::vector<std::pair<WeightType, uintV>>,
-                      std::greater<std::pair<WeightType, uintV>>> & minHeap)
-{
-  uintV numVertices = g.numVertices_;
-  // Min-heap to store vertices based on key value
-  
-  // Initialize the min-heap with the first vertex
-  key[startVertex] = 0; //NOTE: Change to 0 leads to full tree for all threads
-  minHeap.push({0, startVertex}); // (weight, vertex) 
-
-  while (!minHeap.empty())
-  {
-    // Extract the vertex with minimum key value
-    uintV u;
-    {
-        std::lock_guard<std::mutex> lock(mtx);
-        u = minHeap.top().second;
-        minHeap.pop();
+struct Edge {
+    int src, dest, weight;
+    Edge(int s, int d, int w) : src(s), dest(d), weight(w) {}
+    bool operator<(const Edge &other) const {
+        return weight < other.weight;
     }
+};
 
-    // std::cout << "u: " << u << std:: endl;
-    if (u < startVertex && u > endVertex) 
-      continue;
+void findLocalMinEdge(Graph &g, const std::vector<bool> &inMST, int start, int end, Edge &localMinEdge) {
+    WeightType localMinWeight = std::numeric_limits<WeightType>::max();
+    int localSrc = -1, localDest = -1;
 
-    if (inMST[u])
-      continue; // Skip if vertex is already included in MST
-
-    {
-      std::lock_guard<std::mutex> lock(mtx);
-      inMST[u] = true; // Include vertex in MST
-    }
-
-    // Iterate over all vertices to find neighbors of u (since we don't have direct access to neighbors with weights)
-    const auto &neighbors = g.getNeighbors(u);
-    for (const auto &v : neighbors)
-    {
-      if (v >= startVertex && v < endVertex) 
-      {
-        WeightType weight = g.getEdgeWeight(u, v); // Directly access the weight from the adjacency matrix
-
-        // If v is not in MST and weight of (u,v) is smaller than the current key of v
-        {
-          
-          if (!inMST[v] && weight < key[v])
-          {
-            std::lock_guard<std::mutex> lock(mtx);
-
-            if (weight < key[v]){
-              key[v] = weight;
-              parent[v] = u;
-              minHeap.push({key[v], v});
+    for (int i = start; i < end; ++i) {
+        if (inMST[i]) {
+            const std::vector<uintV> &neighbors = g.getNeighbors(i);
+            for (uintV v : neighbors) {
+                WeightType weight = g.getEdgeWeight(i, v);
+                if (!inMST[v] && weight < localMinWeight) {
+                    localMinWeight = weight;
+                    localSrc = i;
+                    localDest = v;
+                }
             }
-          }
         }
-      }
     }
-  }
-}
 
+    localMinEdge = Edge(localSrc, localDest, localMinWeight);
+}
 
 void primMSTParallel(Graph &g, uintE n_threads) {
-  // to be implemented
-  timer thread_timer;
+    ThreadPool pool(n_threads);
+    std::vector<bool> inMST(g.numVertices(), false);
+    std::vector<Edge> mstEdges;
+    inMST[0] = true;
+    long mstWeight = 0;
+    timer t1;
+    t1.start();
 
-  uintV numVertices = g.numVertices_;
-  // std::cout << numVertices << std::endl;
-  std::vector<bool> inMST(numVertices, false);          // Tracks if a vertex is in MST
-  std::vector<WeightType> key(numVertices, MAX_WEIGHT); // Key values used to pick minimum weight edge
-  std::vector<uintV> parent(numVertices, -1);           // Stores the MST
-  std::vector<uintV> colors(numVertices, -1);
+    for (int count = 1; count < g.numVertices(); ++count) {
+        std::vector<Edge> localMins(n_threads, Edge(-1, -1, std::numeric_limits<WeightType>::max()));
+        int chunkSize = (g.numVertices() + n_threads - 1) / n_threads;
 
-  std::vector<std::priority_queue<std::pair<WeightType, uintV>,
-                      std::vector<std::pair<WeightType, uintV>>,
-                      std::greater<std::pair<WeightType, uintV>>>>
-      minHeap(n_threads);
+        std::vector<std::future<void>> futures;
+        for (uintE i = 0; i < n_threads; ++i) {
+            int start = i * chunkSize;
+            int end = std::min((i + 1) * chunkSize, g.numVertices());
+            futures.emplace_back(pool.enqueue(findLocalMinEdge, std::ref(g), std::ref(inMST), start, end, std::ref(localMins[i])));
+        }
 
+        for (auto &f : futures) {
+            f.get();
+        }
 
-  std::vector<double> time_taken_vector(n_threads, 0.0);
-  std::mutex mtx;
+        // Reduce phase: Find the overall minimum edge
+        Edge minEdge = *std::min_element(localMins.begin(), localMins.end());
 
-  int chunk_size = (numVertices + n_threads - 1) / n_threads;
-  std::vector<std::thread> threads;
-
-  for (int tid = 0; tid < n_threads; tid++){ 
-    int start = tid * chunk_size;
-    int end = std::min((tid + 1) * chunk_size, numVertices); // to account for the last one
-    std::cout << "start: " << start << std:: endl;
-    std::cout << "end: " << end << std:: endl;
-
-    // threads.emplace_back(HelperMSTParallel, std::ref(g), start, end, std::ref(inMST), std::ref(key), std::ref(parent), std::ref(mtx));
-    threads.emplace_back(HelperMSTParallel, std::ref(g), start, end, std::ref(inMST), std::ref(key), std::ref(parent), std::ref(mtx), std::ref(colors), tid, std::ref(minHeap[tid]));
-  }
-
-  for (auto& thread : threads) {
-    thread.join();
-  }
-
-  for (size_t i = 0; i < numVertices; ++i)
-  {
-    if (parent[i] != -1)
-    { // Check if there is a parent
-      std::cout << parent[i] << " <-> " << i << " " << key[i] << std::endl;
+        if (minEdge.src != -1) {
+            inMST[minEdge.dest] = true;
+            mstEdges.push_back(minEdge);
+            mstWeight += minEdge.weight;
+            // std::cout << "Edge (" << minEdge.src << " - " << minEdge.dest << ") with weight " << minEdge.weight << " added to MST\n";
+        }
     }
-  }
+    double total_time = t1.stop();
 
-  //=== Merge
-  // std::priority_queue<std::pair<WeightType, uintV>,
-  //                     std::vector<std::pair<WeightType, uintV>>,
-  //                     std::greater<std::pair<WeightType, uintV>>>
-  //     fullMinHeap;
-
-  // fullMinHeap.push({0, 0}); // (weight, vertex) 
-
-  // for (int tid = 0; tid < n_threads; tid++){
-  //   while (!minHeap[tid].empty()) {
-  //     fullMinHeap.push(minHeap[tid].top());
-  //     minHeap[tid].pop();
-  //   }
-  // }
-
-  // for (int tid = 0; tid < n_threads; tid++){
-  //   while (!minHeap[tid].empty()) {
-  //     std::cout << minHeap[tid].top().first << " - " << minHeap[tid].top().second << std::endl;
-  //     minHeap[tid].pop();
-  //   }
-  // }
-  
-
+    std::cout << "Total weight of MST: " << mstWeight << std::endl;
+    std::cout << "Total time taken: " << total_time << std::endl;
 }
 
-int main(int argc, char *argv[]) {
-  cxxopts::Options options(
-      "minimum_weight_spanning_tree",
-      "Calculate MST using serial, parallel and MPI execution");
-  options.add_options(
-      "",
-      {
-          {"nThreads", "Number of Threads",
-           cxxopts::value<uintE>()->default_value(DEFAULT_NUMBER_OF_THREADS)},
-          {"inputFile", "Input graph file path",
-           cxxopts::value<std::string>()->default_value(
-               "/scratch/input_graphs/roadNet-CA")},
-      });
+int main(int argc, char *argv[])
+{
+    cxxopts::Options options(
+        "minimum_weight_spanning_tree",
+        "Calculate MST using serial, parallel and MPI execution");
+    options.add_options(
+        "",
+        {
+            {"nThreads", "Number of Threads",
+             cxxopts::value<uintE>()->default_value(DEFAULT_NUMBER_OF_THREADS)},
+            {"inputFile", "Input graph file path",
+             cxxopts::value<std::string>()->default_value(
+                 "/scratch/input_graphs/roadNet-CA")},
+        });
 
-  auto cl_options = options.parse(argc, argv);
-  uintE n_threads = cl_options["nThreads"].as<uintE>();
-  std::string input_file_path = cl_options["inputFile"].as<std::string>();
+    auto cl_options = options.parse(argc, argv);
+    uintE n_threads = cl_options["nThreads"].as<uintE>();
+    std::string input_file_path = cl_options["inputFile"].as<std::string>();
 
-  std::cout << std::fixed;
-  std::cout << "Number of Threads : " << n_threads << std::endl;
+    std::cout << std::fixed;
+    std::cout << "Number of Threads : " << n_threads << std::endl;
 
-  Graph g;
-  std::cout << "Reading graph\n";
-  g.readGraphFromBinary<int>(input_file_path);
-  std::cout << "Created graph\n";
-  primMSTParallel(g, n_threads);
+    Graph g;
+    std::cout << "Reading graph\n";
+    g.readGraphFromBinary<int>(input_file_path);
+    std::cout << "Created graph\n";
+    primMSTParallel(g, n_threads);
 
-  return 0;
+    return 0;
 }

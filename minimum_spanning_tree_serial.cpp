@@ -19,7 +19,7 @@ void primMSTSerial(Graph &g)
     std::vector<uintV> parent(numVertices, -1);
 
     // Initialize total weight of MST
-    WeightType totalWeight = 0;
+    long totalWeight = 0;
 
     std::priority_queue<std::pair<WeightType, uintV>,
                         std::vector<std::pair<WeightType, uintV>>,
