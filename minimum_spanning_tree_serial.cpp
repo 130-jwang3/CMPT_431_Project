@@ -58,7 +58,7 @@ void primMSTSerial(Graph &g)
         }
     }
 
-    std::ofstream outFile("./outputs/weighted_graph.out");
+    std::ofstream outFile("./outputs/result_serial.out");
     if (!outFile)
     {
         std::cerr << "Error opening output file." << std::endl;

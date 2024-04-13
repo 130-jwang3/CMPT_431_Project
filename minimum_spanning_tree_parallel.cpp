@@ -24,7 +24,7 @@ struct Edge {
     }
 };
 
-void primMSTParallel(Graph &g, uintE n_threads, const std::string& outputFilePath) {
+void primMSTParallel(Graph &g, uintE n_threads) {
     ThreadPool pool(n_threads);
     std::vector<bool> inMST(g.numVertices(), false);
     std::vector<Edge> mstEdges;
@@ -61,7 +61,7 @@ void primMSTParallel(Graph &g, uintE n_threads, const std::string& outputFilePat
     }
 
     // Output the MST edges to a file
-    std::ofstream outFile(outputFilePath);
+    std::ofstream outFile("output/result_parallel.out");
     if (outFile.is_open()) {
         for (const Edge& edge : mstEdges) {
             outFile << edge.src << " <-> " << edge.dest << " " << edge.weight << std::endl;
@@ -89,8 +89,6 @@ int main(int argc, char *argv[])
             {"inputFile", "Input graph file path",
              cxxopts::value<std::string>()->default_value(
                  "/scratch/input_graphs/roadNet-CA")},
-            {"outputFile", "Output file path",
-             cxxopts::value<std::string>()->default_value("output/result_parallel.out")}
         });
 
     auto cl_options = options.parse(argc, argv);
@@ -105,7 +103,7 @@ int main(int argc, char *argv[])
     std::cout << "Reading graph\n";
     g.readGraphFromBinary<int>(input_file_path);
     std::cout << "Created graph\n";
-    primMSTParallel(g, n_threads, output_file_path);
+    primMSTParallel(g, n_threads);
 
     return 0;
 }
