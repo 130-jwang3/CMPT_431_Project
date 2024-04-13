@@ -61,14 +61,14 @@ void primMSTParallel(Graph &g, uintE n_threads) {
     }
 
     // Output the MST edges to a file
-    std::ofstream outFile("output/result_parallel.out");
+    std::ofstream outFile("./outputs/result_parallel.out");
     if (outFile.is_open()) {
         for (const Edge& edge : mstEdges) {
             outFile << edge.src << " <-> " << edge.dest << " " << edge.weight << std::endl;
         }
         outFile.close();
     } else {
-        std::cerr << "Failed to open file for writing: " << outputFilePath << std::endl;
+        std::cerr << "Failed to open file for writing: " << "./outputs/result_parallel.out" << std::endl;
     }
 
     double total_time = t1.stop();
