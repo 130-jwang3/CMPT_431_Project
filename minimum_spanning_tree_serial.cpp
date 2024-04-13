@@ -57,7 +57,6 @@ void primMSTSerial(Graph &g)
             }
         }
     }
-    double total_time = t1.stop();
 
     std::ofstream outFile("./outputs/weighted_graph.out");
     if (!outFile)
@@ -73,6 +72,8 @@ void primMSTSerial(Graph &g)
             outFile << parent[i] << " <-> " << i << " " << key[i] << std::endl;
         }
     }
+    
+    double total_time = t1.stop();
 
     // Output the total weight of the MST
     std::cout << "Total weight of MST: " << totalWeight << std::endl;
