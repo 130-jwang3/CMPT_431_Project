@@ -1,1 +1,75 @@
-To be determined
+./minimum_spanning_tree_serial --nThreads 1 --inputFile ./testing_graphs/graph_1000.txt
+Number of Threads : 1
+Input File Path: ./testing_graphs/graph_1000.txt
+Reading graph
+Created graph
+Total weight of MST: 466371
+Total time taken: 0.005246
+
+./minimum_spanning_tree_parallel --nThreads 2 --inputFile ./testing_graphs/graph_1000.txt
+Number of Threads : 2
+Reading graph
+Created graph
+Total weight of MST: 466371
+Total time taken: 0.000403
+
+mpiexec -n 2 ./minimum_spanning_tree_mpi --inputFile ./testing_graphs/graph_1000.txt
+MST weight is : 466371
+Total time taken: 0.000963926
+
+./minimum_spanning_tree_serial --nThreads 1 --inputFile ./testing_graphs/graph_10000.txt
+Number of Threads : 1
+Input File Path: ./testing_graphs/graph_10000.txt
+Reading graph
+Created graph
+Total weight of MST: 3877193
+Total time taken: 0.036301
+
+./minimum_spanning_tree_parallel --nThreads 2 --inputFile ./testing_graphs/graph_10000.txt
+Number of Threads : 2
+Reading graph
+Created graph
+Total weight of MST: 3877193
+Total time taken: 0.006966
+
+mpiexec -n 2 ./minimum_spanning_tree_mpi --inputFile ./testing_graphs/graph_10000.txt
+MST weight is : 3877193
+Total time taken: 0.00598216
+
+./minimum_spanning_tree_serial --nThreads 1 --inputFile ./testing_graphs/graph_20000.txt
+Number of Threads : 1
+Input File Path: ./testing_graphs/graph_20000.txt
+Reading graph
+Created graph
+Total weight of MST: 7524245
+Total time taken: 0.062409
+
+./minimum_spanning_tree_parallel --nThreads 2 --inputFile ./testing_graphs/graph_20000.txt
+Number of Threads : 2
+Reading graph
+Created graph
+Total weight of MST: 7524245
+Total time taken: 0.015814
+
+mpiexec -n 2 ./minimum_spanning_tree_mpi --inputFile ./testing_graphs/graph_20000.txt
+MST weight is : 7524245
+Total time taken: 0.0115609
+
+./minimum_spanning_tree_serial --nThreads 1 --inputFile ./testing_graphs/graph_40000.txt
+Number of Threads : 1
+Input File Path: ./testing_graphs/graph_40000.txt
+Reading graph
+Created graph
+Total weight of MST: 14819694
+Total time taken: 0.097339
+
+./minimum_spanning_tree_parallel --nThreads 2 --inputFile ./testing_graphs/graph_40000.txt
+Number of Threads : 2
+Reading graph
+Created graph
+Total weight of MST: 14819694
+Total time taken: 0.037760
+
+mpiexec -n 2 ./minimum_spanning_tree_mpi --inputFile ./testing_graphs/graph_40000.txt
+MST weight is : 14819694
+Total time taken: 0.0234261

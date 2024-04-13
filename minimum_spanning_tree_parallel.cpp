@@ -59,6 +59,8 @@ void primMSTParallel(Graph &g, uintE n_threads) {
             }
         }
     }
+    
+    double total_time = t1.stop();
 
     // Output the MST edges to a file
     std::ofstream outFile("./outputs/result_parallel.out");
@@ -71,7 +73,6 @@ void primMSTParallel(Graph &g, uintE n_threads) {
         std::cerr << "Failed to open file for writing: " << "./outputs/result_parallel.out" << std::endl;
     }
 
-    double total_time = t1.stop();
     std::cout << "Total weight of MST: " << mstWeight << std::endl;
     std::cout << "Total time taken: " << total_time << std::endl;
 }
@@ -94,7 +95,6 @@ int main(int argc, char *argv[])
     auto cl_options = options.parse(argc, argv);
     uintE n_threads = cl_options["nThreads"].as<uintE>();
     std::string input_file_path = cl_options["inputFile"].as<std::string>();
-    std::string output_file_path = cl_options["outputFile"].as<std::string>();
 
     std::cout << std::fixed;
     std::cout << "Number of Threads : " << n_threads << std::endl;
