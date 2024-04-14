@@ -36,43 +36,40 @@ The Minimum-weight Spanning Tree (MST) of a graph is the spanning tree with the 
 ### Generate input files:
 1. Go to the `testing_graphs` directory: `cd testing_graphs`
 2. Generate a graph of size 1000 named `graph_1000.txt`: `python3 generate_graph.py 1000` (takes approx. 20 sec)
-3. Generate a graph of size 10000 named 'graph_10000.txt': `python3 generate_graph.py 10000` (takes approx. 50 sec )
+3. Generate a graph of size 10000 named `graph_10000.txt`: `python3 generate_graph.py 10000` (takes approx. 50 sec )
 4. Generate a graph of size n: `python3 generate_graph.py {n}` (may take about 10 minutes when n=40000)
 
 ### Run the Serial, Parallel, and Distributed implementations
 1. Go back to the original directory: `cd ..`
-2. Run the Serial implementation by creating and submitting the following job file: 
-`#!/bin/bash`
-`#`
-`#SBATCH --cpus-per-task=4`
-`#SBATCH --time=02:00`
-`#SBATCH --mem=1G`
-`#SBATCH --partition=slow`
+2. Run the Serial implementation by creating and submitting the following job file: \
+`#!/bin/bash`\
+`#`\
+`#SBATCH --cpus-per-task=4`\
+`#SBATCH --time=02:00`\
+`#SBATCH --mem=1G`\
+`#SBATCH --partition=slow`\
+`srun ./minimum_spanning_tree_serial --inputFile absolute_path_of_generated_input_file.txt`
 
-'srun ./minimum_spanning_tree_serial --inputFile absolute_path_of_generated_input_file.txt'
-
-3. Run the Parallel implementation by creating and submitting the following job file:
-`#!/bin/bash`
-`#`
-`#SBATCH --cpus-per-task=4`
-`#SBATCH --time=02:00`
-`#SBATCH --mem=1G`
-`#SBATCH --partition=slow`
-
-'srun ./minimum_spanning_tree_parallel --nThreads 4 --inputFile absolute_path_of_generated_input_file.txt'
+3. Run the Parallel implementation by creating and submitting the following job file:\
+`#!/bin/bash`\
+`#`\
+`#SBATCH --cpus-per-task=4`\
+`#SBATCH --time=02:00`\
+`#SBATCH --mem=1G`\
+`#SBATCH --partition=slow`\
+`srun ./minimum_spanning_tree_parallel --nThreads 4 --inputFile absolute_path_of_generated_input_file.txt`
     - **Note:** The number of threads can be changed by setting `nThread` to any reasonable positive integer (1,2,3,4,5...) suitable for your running environment.
 
-4. Run the MPI implementation by creating and submitting the following job file: 
-`#!/bin/bash`
-`#`
-`#SBATCH --cpus-per-task=1`
-`#SBATCH --nodes=1`
-`#SBATCH --ntasks=4`
-`#SBATCH --mem=1G`
-`#SBATCH --time=05:00`
-`#SBATCH --partition=slow`
-
-srun ./minimum_spanning_tree_mpi --inputFile absolute_path_of_generated_input_file.txt
+4. Run the MPI implementation by creating and submitting the following job file:\
+`#!/bin/bash`\
+`#`\
+`#SBATCH --cpus-per-task=1`\
+`#SBATCH --nodes=1`\
+`#SBATCH --ntasks=4`\
+`#SBATCH --mem=1G`\
+`#SBATCH --time=05:00`\
+`#SBATCH --partition=slow`\
+`srun ./minimum_spanning_tree_mpi --inputFile absolute_path_of_generated_input_file.txt`
     - **Note:** The number of processes can be changed by setting `n` to any reasonable positive integer (1,2,3,4,5...) suitable for your running environment.
 
 ### Check outputs
