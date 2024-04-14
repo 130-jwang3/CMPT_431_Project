@@ -70,7 +70,7 @@ void computeMST(const std::vector<Edge>& edges, int V) {
         }
     }
 
-    std::ofstream out("./sample_outputs/result_mpi.out");
+    std::ofstream out("./outputs/result_mpi.out");
     for (const auto& e : mst) {
         out << e.vertex1 << " - " << e.vertex2 << " with weight " << e.weight << std::endl;
     }
