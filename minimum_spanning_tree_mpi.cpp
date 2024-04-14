@@ -11,6 +11,7 @@
 
 #define INF INT_MAX
 
+// Structure to represent an edge
 struct Edge {
     int weight;
     int vertex1;
@@ -19,26 +20,30 @@ struct Edge {
     Edge() : weight(INF), vertex1(-1), vertex2(-1) {}
     Edge(int w, int v1, int v2) : weight(w), vertex1(v1), vertex2(v2) {}
 
+    // Comparison operator for sorting
     bool operator<(const Edge& e) const {
         return weight < e.weight;
     }
 };
 
+// Class for Union-Find data structure
 class UnionFind {
 public:
     std::vector<int> parent;
     std::vector<int> rank;
 
     UnionFind(int size) : parent(size), rank(size, 0) {
-        std::iota(parent.begin(), parent.end(), 0);
+        std::iota(parent.begin(), parent.end(), 0); // Initialize parent array
     }
 
+    // Find operation with path compression
     int find(int u) {
         if (parent[u] != u)
             parent[u] = find(parent[u]);  // Path compression
         return parent[u];
     }
 
+    // Optimize rank with the union operation
     bool unionSet(int u, int v) {
         int rootU = find(u);
         int rootV = find(v);
@@ -57,30 +62,32 @@ public:
     }
 };
 
+// Function to compute Minimum Spanning Tree (MST)
 void computeMST(const std::vector<Edge>& edges, int V) {
     long mst_weight = 0;
     UnionFind uf(V);
     std::vector<Edge> mst;
 
+    // Iterate over edges and apply Kruskal's algorithm
     for (const auto& e : edges) {
         if (uf.unionSet(e.vertex1, e.vertex2)) {
             mst.push_back(e);
             mst_weight+=e.weight;
-            if (mst.size() == V - 1) break;
+            if (mst.size() == V - 1) break; // MST found
         }
     }
 
+<<<<<<< HEAD
     std::ofstream out("./outputs/result_mpi.out");
+=======
+    // Write MST edges to output file
+    std::ofstream out("./sample_outputs/result_mpi.out");
+>>>>>>> 9efd263cd50d196949c423b770b7522d144aabdc
     for (const auto& e : mst) {
         out << e.vertex1 << " - " << e.vertex2 << " with weight " << e.weight << std::endl;
     }
     out.close();
 
-    // std::cout << "Edges in the MST:" << std::endl;
-    // for (const auto& e : mst) {
-    //     std::cout << e.vertex1 << " - " << e.vertex2 << " with weight " << e.weight << std::endl;
-    //     mst_weight+=e.weight;
-    // }
     std::cout << "MST weight is : " << mst_weight << std::endl;
 }
 
@@ -99,13 +106,12 @@ int main(int argc, char** argv) {
     auto cl_options = options.parse(argc, argv);
     std::string input_file_path = cl_options["inputFile"].as<std::string>();
 
-    // std::cout << "Input File Path: " << input_file_path << std::endl;
+    // MPI initialization
     MPI_Init(&argc, &argv);
     int world_rank, world_size;
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
-    //const int V = 9; // Number of vertices
     std::vector<Edge> all_edges;
     int v=0;  //vertex counter
 
@@ -133,43 +139,50 @@ int main(int argc, char** argv) {
             max_vertex_id = std::max({max_vertex_id, from, to}); // Update max_vertex_id
             all_edges.emplace_back(weight, from, to);
         }
-        v = max_vertex_id + 1;
+        v = max_vertex_id + 1; // Update vertex counter
     }
 
+    // Start timer
     timer t1;
     t1.start();
 
-    //the leader process splits data to worker processes
-
+    // The leader process splits data to worker processes
+    // Broadcast total number of edges to all processes
     int total_edges = all_edges.size();
     MPI_Bcast(&total_edges, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
+    // Send edges data to all processes
     std::vector<int> sendcounts(world_size, total_edges / world_size);
     std::vector<int> displs(world_size, 0);
 
+    // Handle uneven distribution of edges
     for (int i = 0; i < world_size; ++i) {
         if (i < total_edges % world_size) {
             sendcounts[i]++;
         }
     }
-
+    
+    // Calculate displacement for scatter operation
     std::partial_sum(sendcounts.begin(), sendcounts.end() - 1, displs.begin() + 1);
     std::transform(sendcounts.begin(), sendcounts.end(), sendcounts.begin(), [](int x) { return x * sizeof(Edge); });
     std::transform(displs.begin(), displs.end(), displs.begin(), [](int x) { return x * sizeof(Edge); });
 
     std::vector<Edge> local_edges(sendcounts[world_rank] / sizeof(Edge));
 
+    // Scatter edges to all processes
     MPI_Scatterv(all_edges.data(), sendcounts.data(), displs.data(), MPI_BYTE,
                  local_edges.data(), sendcounts[world_rank], MPI_BYTE, 0, MPI_COMM_WORLD);
 
+    // Sort local edges
     std::sort(local_edges.begin(), local_edges.end());
 
+    // Gather sorted edges from all processes
     std::vector<Edge> gathered_edges(total_edges);
     MPI_Gatherv(local_edges.data(), sendcounts[world_rank], MPI_BYTE,
                 gathered_edges.data(), sendcounts.data(), displs.data(), MPI_BYTE, 0, MPI_COMM_WORLD);
 
 
-    //the root process merges n sorted vectors from work processes
+    // Root process merges n sorted vectors from work processes
     if (world_rank == 0) {
         std::vector<Edge> fully_sorted_edges;
         fully_sorted_edges.reserve(total_edges); // Reserve space to avoid reallocations
@@ -177,6 +190,7 @@ int main(int argc, char** argv) {
         std::vector<int> current_index(world_size, 0);
         bool done = false;
 
+        // Merge sorted edges
         while (!done) {
             Edge min_edge;
             min_edge.weight = INF;
@@ -198,12 +212,10 @@ int main(int argc, char** argv) {
             }
         }
 
-        // std::cout << "Fully Sorted Edges:" << std::endl;
-        // for (const auto& edge : fully_sorted_edges) {
-        //     std::cout << edge.vertex1 << " - " << edge.vertex2 << " with weight " << edge.weight << std::endl;
-        // }
-
+        // Compute MST using fully sorted edges
         computeMST(fully_sorted_edges, v);
+
+        // Stop timer and print total time taken
         double total_time = t1.stop();
         std::cout << "Total time taken: " << total_time << std::endl;
     }

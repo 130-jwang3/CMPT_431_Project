@@ -9,55 +9,63 @@
 #include <utility>
 #include <limits>
 
+// Function to compute Minimum Spanning Tree (MST) serially
 void primMSTSerial(Graph &g)
 {
     timer t1;
     t1.start();
-    uintV numVertices = g.numVertices_;
-    std::vector<bool> inMST(numVertices, false);
-    std::vector<WeightType> key(numVertices, MAX_WEIGHT);
-    std::vector<uintV> parent(numVertices, -1);
+    uintV numVertices = g.numVertices_; // Number of vertices in the graph
+    std::vector<bool> inMST(numVertices, false); // Track if a vertex is in MST
+    std::vector<WeightType> key(numVertices, MAX_WEIGHT); // Key values used to pick minimum weight edge
+    std::vector<uintV> parent(numVertices, -1); // Parent array to store the MST
 
     // Initialize total weight of MST
     long totalWeight = 0;
 
+    // Priority queue to store edges ordered by weight
     std::priority_queue<std::pair<WeightType, uintV>,
                         std::vector<std::pair<WeightType, uintV>>,
                         std::greater<std::pair<WeightType, uintV>>>
         minHeap;
 
+    // Initialize starting vertex
     key[0] = 0;
     minHeap.push({0, 0});
+
+    // Main loop to construct MST
     while (!minHeap.empty())
     {
-        uintV u = minHeap.top().second;
-        minHeap.pop();
+        uintV u = minHeap.top().second; // Get vertex with smallest key
+        minHeap.pop(); // Remove vertex from priority queue
 
         if (inMST[u])
-            continue;
+            continue; // Skip if vertex is already in MST
 
-        inMST[u] = true;
+        inMST[u] = true; // Mark vertex as visited
 
-        // Total weight update happens here
-        if (u != 0) // Skip for the first vertex as it does not contribute to the MST weight
+        // Total weight update
+        if (u != 0) // Skip the first vertex as it does not contribute to the MST weight
         {
             totalWeight += key[u];
         }
 
-        const auto &neighbors = g.getNeighbors(u);
+        // Explore neighbors of u
+        const auto &neighbors = g.getNeighbors(u); // Get weight of edge (u, v)
         for (const auto &v : neighbors)
         {
             WeightType weight = g.getEdgeWeight(u, v);
 
+            // Update key value and parent if weight is smaller
             if (!inMST[v] && weight < key[v])
             {
                 key[v] = weight;
                 parent[v] = u;
-                minHeap.push({key[v], v});
+                minHeap.push({key[v], v}); // Update minHeap with new key value for v
             }
         }
     }
 
+    // Write MST edges to output file
     std::ofstream outFile("./outputs/result_serial.out");
     if (!outFile)
     {
@@ -73,7 +81,7 @@ void primMSTSerial(Graph &g)
         }
     }
     
-    double total_time = t1.stop();
+    double total_time = t1.stop(); // Stop timer
 
     // Output the total weight of the MST
     std::cout << "Total weight of MST: " << totalWeight << std::endl;
@@ -105,8 +113,10 @@ int main(int argc, char *argv[])
 
     Graph g;
     std::cout << "Reading graph\n";
-    g.readGraphFromBinary<int>(input_file_path);
+    g.readGraphFromBinary<int>(input_file_path); // Read graph from binary file
     std::cout << "Created graph\n";
+
+    // Compute MST serially
     primMSTSerial(g);
 
     return 0;
